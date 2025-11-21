@@ -1,139 +1,126 @@
-"use client";
- 
-import { useState, useEffect, useCallback } from 'react';
-import { Word, Difficulty } from '@/types';
-import { scoreSentence } from '@/lib/scoring';
- 
+'use client';
+
+import { useState } from 'react';
+
 export default function Home() {
-    const [currentWord, setCurrentWord] = useState<Word | null>(null);
-    const [sentence, setSentence] = useState<string>('');
-    const [score, setScore] = useState<number>(0);
-    const [feedbackColor, setFeedbackColor] = useState<string>('text-gray-700');
-    const [isSubmitted, setIsSubmitted] = useState<boolean>(false);
- 
-    const getRandomWord = useCallback(async () => {
-        //const randomIndex = Math.floor(Math.random() * words.length);
-        //const word = words[randomIndex]
- 
-        const response = await fetch('http://localhost:8000/api/word');
-        const data = await response.json();
- 
-        setCurrentWord(data);
-        setSentence('');
-        setScore(0);
-        setFeedbackColor('text-gray-700');
-        setIsSubmitted(false);
-    }, []);
- 
-    useEffect(() => {
-        getRandomWord();
-    }, [getRandomWord]);
- 
-    const handleSentenceChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-        setSentence(e.target.value);
-        // Reset score and feedback if user starts typing again after submission
-        if (isSubmitted) {
-            setScore(0);
-            setFeedbackColor('text-gray-700');
-            setIsSubmitted(false);
-        }
-    };
- 
-    const handleSubmitSentence = () => {
-        if (currentWord) {
-            const newScore = scoreSentence(currentWord.word, sentence);
-            setScore(newScore);
- 
-            if (newScore >= 8.0) {
-                setFeedbackColor('text-success');
-            } else if (newScore >= 6.0) {
-                setFeedbackColor('text-warning');
-            } else {
-                setFeedbackColor('text-danger');
-            }
- 
-            const history = JSON.parse(localStorage.getItem('wordHistory') || '[]');
-            history.push({
-                word: currentWord.word,
-                sentence: sentence,
-                score: newScore,
-                difficulty: currentWord.difficulty_level,
-                timestamp: new Date().toISOString(),
-            });
-            localStorage.setItem('wordHistory', JSON.stringify(history));
-            setIsSubmitted(true);
-        }
-    };
- 
-    const handleNextWord = () => {
-        getRandomWord();
-    };
- 
-    const getDifficultyColor = (difficulty: Difficulty) => {
-        switch (difficulty) {
-            case "Beginner":
-                return "bg-green-200 text-green-800";
-            case "Intermediate":
-                return "bg-yellow-200 text-yellow-800";
-            case "Advanced":
-                return "bg-red-200 text-red-800";
-            default:
-                return "bg-gray-200 text-gray-800";
-        }
-    };
- 
-    if (!currentWord) {
-        return <div className="flex justify-center items-center h-screen">Loading word...</div>;
+  // --- ส่วนที่ 1: ตัวแปรเก็บค่า (State) ---
+  const [sentence, setSentence] = useState('');
+  const [result, setResult] = useState<any>(null); // เก็บผลคะแนนที่ได้จาก API
+  const [isLoading, setIsLoading] = useState(false);
+
+  // ข้อมูลคำศัพท์จำลอง (จริงๆ ต้องดึงจาก API /random-word)
+  const currentWord = { id: 1, word: 'apple', level: 'Beginner' };
+
+  // --- ส่วนที่ 2: ฟังก์ชันทำงาน ---
+  
+  // ฟังก์ชันรับค่าตอนพิมพ์ (ตามโจทย์ 2.1)
+  const handleSentenceChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setSentence(e.target.value);
+  };
+
+  // ฟังก์ชันส่งข้อมูลไปตรวจ (ตามโจทย์ 2.2)
+  const handleSubmit = async () => {
+    if (!sentence.trim()) return;
+
+    setIsLoading(true);
+    try {
+      const response = await fetch('http://localhost:8000/api/validate-sentence', {
+    method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          word_id: currentWord.id,
+          sentence: sentence,
+        }),
+      });
+
+      if (!response.ok) throw new Error('Failed to validate');
+
+      const data = await response.json();
+      setResult(data); // เอาผลลัพธ์มาเก็บไว้โชว์
+
+    } catch (error) {
+      console.error(error);
+      alert('เกิดข้อผิดพลาดในการเชื่อมต่อ API (อย่าลืมเปิด Backend นะ!)');
+    } finally {
+      setIsLoading(false);
     }
- 
-    return (
-        <div className="container mx-auto p-4 max-w-3xl">
-            <h1 className="text-4xl md:text-5xl font-extrabold text-center mb-8 text-gray-800 leading-tight">Word Challenge</h1>
- 
-            <div className="bg-white p-8 rounded-2xl shadow-xl mb-6 border border-gray-100 transform hover:scale-105 transition-transform duration-300 ease-in-out">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4">
-                    <h2 className="text-3xl md:text-4xl font-bold text-primary mb-2 sm:mb-0">{currentWord.word}</h2>
-                    <span className={`px-4 py-1 rounded-full text-sm font-semibold ${getDifficultyColor(currentWord.difficulty_level)} shadow-md`}>
-                        {currentWord.difficulty_level}
-                    </span>
-                </div>
-                <p className="text-lg md:text-xl text-gray-700 mb-6 leading-relaxed">{currentWord.definition}</p>
- 
-                <div className="mb-6">
-                    <label htmlFor="sentence" className="block text-base font-medium text-gray-700 mb-2">Your Sentence:</label>
-                    <textarea
-                        id="sentence"
-                        className="w-full p-4 border border-gray-300 rounded-lg focus:ring-primary focus:border-primary transition duration-200 ease-in-out resize-y text-lg"
-                        rows={4}
-                        placeholder="Type your sentence here..."
-                        value={sentence}
-                        onChange={handleSentenceChange}
-                        disabled={isSubmitted}
-                    ></textarea>
-                </div>
- 
-                <div className="flex flex-col sm:flex-row justify-between items-center mb-6 space-y-4 sm:space-y-0">
-                    <p className="text-2xl font-bold">Score: <span className={`${feedbackColor} transition-colors duration-300`}>{score.toFixed(1)}</span></p>
-                    <div className="flex space-x-3">
-                        {!isSubmitted ? (
-                            <button
-                                onClick={handleSubmitSentence}
-                                className="px-6 py-3 bg-primary text-white rounded-lg hover:bg-secondary transition duration-200 ease-in-out font-medium shadow-md"
-                                disabled={!sentence.trim()}
-                            >
-                                Submit Sentence
-                            </button>
-                        ) : (
-                            <button
-                                onClick={handleNextWord}
-                                className="px-6 py-3 bg-info text-white rounded-lg hover:bg-blue-700 transition duration-200 ease-in-out font-medium shadow-md"
-                            >
-                                Next Word
-                            </button>
-                        )}
-                    </div>
-                </div>
-            </div>
+  };
+
+  // --- ส่วนที่ 3: ส่วนแสดงผลหน้าเว็บ (JSX/HTML) ---
+  // (ส่วนที่คุณน่าจะทำหายไป)
+  return (
+    <div className="min-h-screen bg-gray-50 p-8 flex flex-col items-center">
+      <div className="max-w-2xl w-full bg-white rounded-xl shadow-md p-6">
+        <h1 className="text-3xl font-bold text-center mb-8 text-blue-600">
+          Vocabulary Practice
+        </h1>
+
+        {/* โจทย์ */}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6 text-center">
+          <p className="text-gray-600 mb-2">Please write a sentence using the word:</p>
+          <h2 className="text-4xl font-extrabold text-blue-800 mb-2">{currentWord.word}</h2>
+          <span className="inline-block px-3 py-1 bg-blue-200 text-blue-800 rounded-full text-sm font-medium">
+            Level: {currentWord.level}
+          </span>
         </div>
-    );
+
+        {/* กล่องพิมพ์ข้อความ */}
+        <div className="mb-6">
+          <label className="block text-gray-700 font-medium mb-2">Your Sentence:</label>
+          <textarea
+            className="w-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition text-lg"
+            rows={4}
+            placeholder="Type your sentence here..."
+            value={sentence}
+            onChange={handleSentenceChange}
+          />
+        </div>
+
+        {/* ปุ่มกดส่ง */}
+        <button
+          onClick={handleSubmit}
+          disabled={isLoading || !sentence}
+          className={`w-full py-3 rounded-lg text-white font-bold text-lg transition-colors ${
+            isLoading || !sentence
+              ? 'bg-gray-400 cursor-not-allowed'
+              : 'bg-green-500 hover:bg-green-600'
+          }`}
+        >
+          {isLoading ? 'Checking...' : 'Submit Answer'}
+        </button>
+
+        {/* ส่วนแสดงคะแนน (จะโชว์เมื่อมีผลลัพธ์แล้ว) */}
+        {result && (
+          <div className="mt-8 animate-fade-in">
+            <div className="border-t pt-6">
+              <h3 className="text-xl font-bold mb-4 text-gray-800">Result</h3>
+              
+              <div className={`p-6 rounded-lg border ${result.score >= 50 ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                <div className="flex justify-between items-center mb-4">
+                  <span className="text-lg font-medium text-gray-700">Score</span>
+                  <span className={`text-3xl font-bold ${result.score >= 50 ? 'text-green-600' : 'text-red-600'}`}>
+                    {result.score}/100
+                  </span>
+                </div>
+                
+                <div className="mb-2">
+                  <span className="font-bold text-gray-700">Feedback:</span>
+                  <p className="text-gray-600 mt-1">{result.suggestion}</p>
+                </div>
+
+                {result.corrected_sentence && (
+                  <div className="mt-4 p-3 bg-white rounded border border-gray-200">
+                    <span className="font-bold text-green-700 block mb-1">Corrected Version:</span>
+                    <p className="text-gray-800">{result.corrected_sentence}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }

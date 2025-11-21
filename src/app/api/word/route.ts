@@ -9,5 +9,5 @@ export async function GET() {
   console.log(response)
   const data = await response.json();
   console.log("Tae was here...")
-  return NextResponse.json({ data });
+  return NextResponse.json(data);
 }
